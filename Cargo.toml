@@ -6,3 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+abbs-meta-apml = { git = "https://github.com/AOSC-Dev/abbs-meta-rs", version = "0.1.0" }
+anyhow = "1.0.79"
+clap = { version = "4.4.18", features = ["derive"] }
+env_logger = "0.11.0"
+log = "0.4.20"
+walkdir = "2.4.0"
