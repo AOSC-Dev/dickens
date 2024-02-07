@@ -1,6 +1,6 @@
 use abbs_meta_apml::parse;
 use clap::Parser;
-use log::{debug, error};
+use log::{debug, error, warn};
 use std::{
     collections::HashMap,
     fs::File,
@@ -27,13 +27,42 @@ fn check_abbs_spec(path: &Path) -> anyhow::Result<()> {
         Ok(_) => {
             if let Some(ver) = context.get("VER") {
                 if ver.contains("-") {
-                    error!("{}: VER `{}` contains dash `-`", path.display(), ver);
+                    error!("{}: VER `{}` contains dash(es) `-`", path.display(), ver);
                 }
                 if ver.contains("_") {
-                    error!("{}: VER `{}` contains underscore `_`", path.display(), ver);
+                    error!(
+                        "{}: VER `{}` contains underscore(s) `_`",
+                        path.display(),
+                        ver
+                    );
+                }
+                if ver != &ver.to_lowercase() {
+                    error!(
+                        "{}: VER `{}` contains upper-cased letters",
+                        path.display(),
+                        ver
+                    );
                 }
             } else {
                 error!("{}: Missing VER", path.display());
+            }
+
+            if let Some(rel) = context.get("REL") {
+                match str::parse::<usize>(&rel) {
+                    Ok(rel) => {
+                        if rel == 0 {
+                            error!("{}: REL `{}` should not be zero", path.display(), rel);
+                        }
+                    }
+                    Err(err) => {
+                        error!("{}: REL `{}` is invalid: {}", path.display(), rel, err);
+                    }
+                }
+            }
+
+            if let Some(chkupdate) = context.get("CHKUPDATE") {
+            } else {
+                warn!("{}: Missing CHKUPDATE", path.display());
             }
         }
         Err(vec_err) => {
