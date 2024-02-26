@@ -205,6 +205,8 @@ async fn main() -> anyhow::Result<()> {
 
     res.sort_by(|a, b| a.package.cmp(&b.package));
 
+    println!("Dickens-topic report:");
+    println!("");
     for cur in &res {
         println!(
             "{} upgraded from {} to {} on {}:",
@@ -213,7 +215,26 @@ async fn main() -> anyhow::Result<()> {
             cur.new_version,
             cur.archs.join(", ")
         );
+        println!("<details>");
+
+        let mut added = 0;
+        let mut removed = 0;
+        for line in cur.diff.lines() {
+            if line.starts_with("---") || line.starts_with("+++") {
+                continue;
+            } else if line.starts_with("+") {
+                added += 1;
+            } else if line.starts_with("-") {
+                removed += 1;
+            }
+        }
+
+        println!("<summary>{added} added, {removed} removed</summary>");
+        println!();
+        println!("```diff");
         println!("{}", cur.diff);
+        println!("```");
+        println!("</details>");
     }
     Ok(())
 }
