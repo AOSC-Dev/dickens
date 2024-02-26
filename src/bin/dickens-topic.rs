@@ -1,4 +1,5 @@
 use clap::Parser;
+use debversion::Version;
 use log::info;
 use reqwest::StatusCode;
 use sha2::{Digest, Sha256};
@@ -128,7 +129,29 @@ async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
             continue;
         }
 
-        if let Some(found) = stable_pkgs.iter().find(|p| p.package == topic_pkg.package) {
+        // find matching pkg with highest version
+        let mut found = None;
+        for p in &stable_pkgs {
+            if p.package == topic_pkg.package {
+                match found {
+                    None => found = Some(p),
+                    Some(f) => {
+                        if f.version.parse::<Version>().unwrap()
+                            < p.version.parse::<Version>().unwrap()
+                        {
+                            found = Some(p);
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(found) = found {
+            if found.version == topic_pkg.version {
+                // no update
+                continue;
+            }
+
             info!(
                 "Found upgrade {} from {} to {}",
                 topic_pkg.package, found.version, topic_pkg.version
