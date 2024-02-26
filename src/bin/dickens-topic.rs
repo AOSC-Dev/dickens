@@ -88,7 +88,7 @@ async fn download_pkg(pkg: &Package) -> anyhow::Result<PathBuf> {
             .concat();
         if hash_str == pkg.sha256 {
             info!(
-                "Skipping already downloaded https://aosc.io/debs/{} at {:?}",
+                "Skipping already downloaded https://repo.aosc.io/debs/{} at {:?}",
                 pkg.filename, out
             );
             return Ok(out);
@@ -147,8 +147,10 @@ async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
         }
 
         if let Some(found) = found {
-            if found.version == topic_pkg.version {
-                // no update
+            if found.version.parse::<Version>().unwrap()
+                >= topic_pkg.version.parse::<Version>().unwrap()
+            {
+                // downgrade or no update
                 continue;
             }
 
@@ -175,10 +177,17 @@ async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
 
             res.push(new_res);
         } else {
-            info!(
-                "New package {} versioned {}",
-                topic_pkg.package, topic_pkg.package
-            );
+            let right = download_pkg(&topic_pkg).await?;
+            let diff = Command::new("./diff-deb-new.sh").arg(right).output()?;
+
+            let new_res = Res {
+                package: topic_pkg.package.clone(),
+                archs: vec![topic_pkg.architecture.clone()],
+                old_version: "".to_string(),
+                new_version: topic_pkg.version.clone(),
+                diff: String::from_utf8_lossy(&diff.stdout).to_string(),
+            };
+            res.push(new_res);
         }
     }
     Ok(res)
@@ -231,13 +240,22 @@ async fn main() -> anyhow::Result<()> {
     println!("Dickens-topic report:");
     println!("");
     for cur in &res {
-        println!(
-            "{} upgraded from {} to {} on {}:",
-            cur.package,
-            cur.old_version,
-            cur.new_version,
-            cur.archs.join(", ")
-        );
+        if cur.old_version.is_empty() {
+            println!(
+                "{} introduced at {} on {}:",
+                cur.package,
+                cur.new_version,
+                cur.archs.join(", ")
+            );
+        } else {
+            println!(
+                "{} upgraded from {} to {} on {}:",
+                cur.package,
+                cur.old_version,
+                cur.new_version,
+                cur.archs.join(", ")
+            );
+        }
         println!("<details>");
 
         let mut added = 0;
