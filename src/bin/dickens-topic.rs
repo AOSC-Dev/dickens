@@ -1,6 +1,7 @@
 use clap::Parser;
 use log::info;
 use reqwest::StatusCode;
+use sha2::{Digest, Sha256};
 use std::{
     io::{Cursor, Read},
     path::{Path, PathBuf},
@@ -21,6 +22,7 @@ struct Package {
     version: String,
     architecture: String,
     filename: String,
+    sha256: String,
 }
 
 async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
@@ -60,6 +62,7 @@ async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
                     "Version" => pkg.version = value.to_string(),
                     "Architecture" => pkg.architecture = value.to_string(),
                     "Filename" => pkg.filename = value.to_string(),
+                    "SHA256" => pkg.sha256 = value.to_string(),
                     _ => {}
                 }
             }
@@ -69,13 +72,33 @@ async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
     Ok(res)
 }
 
-async fn download_pkg(path: &str) -> anyhow::Result<PathBuf> {
+async fn download_pkg(pkg: &Package) -> anyhow::Result<PathBuf> {
     // https://georgik.rocks/how-to-download-binary-file-in-rust-by-reqwest/
     let mut out = PathBuf::new();
     out.push("debs");
-    out.push(Path::new(&path).file_name().unwrap());
-    info!("Downloading https://aosc.io/debs/{} to {:?}", path, out);
-    let response = reqwest::get(format!("https://repo.aosc.io/debs/{}", path)).await?;
+    out.push(Path::new(&pkg.filename).file_name().unwrap());
+    if out.exists() {
+        let content = std::fs::read(&out)?;
+        let hash = Sha256::digest(&content);
+        let hash_str = hash
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<Vec<_>>()
+            .concat();
+        if hash_str == pkg.sha256 {
+            info!(
+                "Skipping already downloaded https://aosc.io/debs/{} at {:?}",
+                pkg.filename, out
+            );
+            return Ok(out);
+        }
+    }
+
+    info!(
+        "Downloading https://aosc.io/debs/{} to {:?}",
+        pkg.filename, out
+    );
+    let response = reqwest::get(format!("https://repo.aosc.io/debs/{}", pkg.filename)).await?;
     let mut file = std::fs::File::create(&out)?;
     let mut content = Cursor::new(response.bytes().await?);
     std::io::copy(&mut content, &mut file)?;
@@ -121,8 +144,8 @@ async fn main() -> anyhow::Result<()> {
                 );
 
                 // download topic pkg
-                let left = download_pkg(&found.filename).await?;
-                let right = download_pkg(&topic_pkg.filename).await?;
+                let left = download_pkg(&found).await?;
+                let right = download_pkg(&topic_pkg).await?;
                 let diff = Command::new("./diff-deb.sh")
                     .arg(left)
                     .arg(right)
