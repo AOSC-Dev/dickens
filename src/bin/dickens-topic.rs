@@ -82,19 +82,29 @@ async fn download_pkg(path: &str) -> anyhow::Result<PathBuf> {
     Ok(out)
 }
 
+#[derive(Debug, Clone)]
+struct Res {
+    package: String,
+    archs: Vec<String>,
+    old_version: String,
+    new_version: String,
+    diff: String,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
     let opt = Cli::parse();
+    let mut res: Vec<Res> = vec![];
     let archs = [
-        // "all",
+        "all",
         "amd64",
-        // "arm64",
-        // "loongarch64",
-        // "loongson3",
-        // "mips64r6el",
-        // "ppc64el",
-        // "riscv64",
+        "arm64",
+        "loongarch64",
+        "loongson3",
+        "mips64r6el",
+        "ppc64el",
+        "riscv64",
     ];
     for arch in archs {
         let topic_pkgs = fetch_pkgs(arch, &opt.topic).await?;
@@ -117,8 +127,32 @@ async fn main() -> anyhow::Result<()> {
                     .arg(left)
                     .arg(right)
                     .output()?;
-                info!("Diff of two versions:");
-                println!("{}", String::from_utf8_lossy(&diff.stdout));
+
+                let new_res = Res {
+                    package: topic_pkg.package.clone(),
+                    archs: vec![topic_pkg.architecture.clone()],
+                    old_version: found.version.clone(),
+                    new_version: topic_pkg.version.clone(),
+                    diff: String::from_utf8_lossy(&diff.stdout).to_string(),
+                };
+
+                // merge or insert
+                let mut insert = true;
+                for cur in &mut res {
+                    if cur.package == new_res.package
+                        && cur.old_version == new_res.old_version
+                        && cur.new_version == new_res.new_version
+                        && cur.diff == new_res.diff
+                    {
+                        cur.archs.push(topic_pkg.architecture.clone());
+                        insert = false;
+                        break;
+                    }
+                }
+
+                if insert {
+                    res.push(new_res);
+                }
             } else {
                 info!(
                     "New package {} versioned {}",
@@ -126,6 +160,17 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
         }
+    }
+
+    for cur in &res {
+        println!(
+            "{} upgraded from {} to {} on {}:",
+            cur.package,
+            cur.old_version,
+            cur.new_version,
+            cur.archs.join(", ")
+        );
+        println!("{}", cur.diff);
     }
     Ok(())
 }
