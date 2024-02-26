@@ -1,7 +1,11 @@
 use clap::Parser;
 use log::info;
 use reqwest::StatusCode;
-use std::io::{Cursor, Read};
+use std::{
+    io::{Cursor, Read},
+    path::{Path, PathBuf},
+    process::Command,
+};
 use xz::read::XzDecoder;
 
 #[derive(Parser)]
@@ -65,31 +69,61 @@ async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
     Ok(res)
 }
 
+async fn download_pkg(path: &str) -> anyhow::Result<PathBuf> {
+    // https://georgik.rocks/how-to-download-binary-file-in-rust-by-reqwest/
+    let mut out = PathBuf::new();
+    out.push("debs");
+    out.push(Path::new(&path).file_name().unwrap());
+    info!("Downloading https://aosc.io/debs/{} to {:?}", path, out);
+    let response = reqwest::get(format!("https://repo.aosc.io/debs/{}", path)).await?;
+    let mut file = std::fs::File::create(&out)?;
+    let mut content = Cursor::new(response.bytes().await?);
+    std::io::copy(&mut content, &mut file)?;
+    Ok(out)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
     let opt = Cli::parse();
     let archs = [
-        "all",
+        // "all",
         "amd64",
-        "arm64",
-        "loongarch64",
-        "loongson3",
-        "mips64r6el",
-        "ppc64el",
-        "riscv64",
+        // "arm64",
+        // "loongarch64",
+        // "loongson3",
+        // "mips64r6el",
+        // "ppc64el",
+        // "riscv64",
     ];
     for arch in archs {
         let topic_pkgs = fetch_pkgs(arch, &opt.topic).await?;
         let stable_pkgs = fetch_pkgs(arch, "stable").await?;
         for topic_pkg in topic_pkgs {
+            if topic_pkg.package.ends_with("-dbg") {
+                continue;
+            }
+
             if let Some(found) = stable_pkgs.iter().find(|p| p.package == topic_pkg.package) {
-                println!(
-                    "Upgrade {} from {} to {}",
+                info!(
+                    "Found upgrade {} from {} to {}",
                     topic_pkg.package, found.version, topic_pkg.version
                 );
+
+                // download topic pkg
+                let left = download_pkg(&found.filename).await?;
+                let right = download_pkg(&topic_pkg.filename).await?;
+                let diff = Command::new("./diff-deb.sh")
+                    .arg(left)
+                    .arg(right)
+                    .output()?;
+                info!("Diff of two versions:");
+                println!("{}", String::from_utf8_lossy(&diff.stdout));
             } else {
-                println!("New {} {}", topic_pkg.package, topic_pkg.package);
+                info!(
+                    "New package {} versioned {}",
+                    topic_pkg.package, topic_pkg.package
+                );
             }
         }
     }
