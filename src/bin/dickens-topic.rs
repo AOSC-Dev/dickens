@@ -117,6 +117,11 @@ struct Res {
 async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
     let mut res = vec![];
     let topic_pkgs = fetch_pkgs(arch, &topic).await?;
+    if topic_pkgs.is_empty() {
+        // no new packages
+        return Ok(res);
+    }
+
     let stable_pkgs = fetch_pkgs(arch, "stable").await?;
     for topic_pkg in topic_pkgs {
         if topic_pkg.package.ends_with("-dbg") {
@@ -197,6 +202,8 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
+
+    res.sort_by(|a, b| a.package.cmp(&b.package));
 
     for cur in &res {
         println!(
