@@ -70,7 +70,26 @@ async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
         }
         res.push(pkg);
     }
-    Ok(res)
+
+    // only keep latest version
+    // packages are already sorted by name
+    let mut real_res: Vec<Package> = vec![];
+    for pkg in res {
+        if let Some(last) = real_res.last_mut() {
+            if last.package == pkg.package
+                && last.architecture == pkg.architecture
+                && last.version.parse::<Version>().unwrap()
+                    < pkg.version.parse::<Version>().unwrap()
+            {
+                *last = pkg;
+            } else {
+                real_res.push(pkg);
+            }
+        } else {
+            real_res.push(pkg);
+        }
+    }
+    Ok(real_res)
 }
 
 async fn download_pkg(pkg: &Package) -> anyhow::Result<PathBuf> {
@@ -129,24 +148,7 @@ async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
             continue;
         }
 
-        // find matching pkg with highest version
-        let mut found = None;
-        for p in &stable_pkgs {
-            if p.package == topic_pkg.package {
-                match found {
-                    None => found = Some(p),
-                    Some(f) => {
-                        if f.version.parse::<Version>().unwrap()
-                            < p.version.parse::<Version>().unwrap()
-                        {
-                            found = Some(p);
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some(found) = found {
+        if let Some(found) = stable_pkgs.iter().find(|p| p.package == topic_pkg.package) {
             if found.version.parse::<Version>().unwrap()
                 >= topic_pkg.version.parse::<Version>().unwrap()
             {
