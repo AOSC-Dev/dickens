@@ -60,7 +60,7 @@ fn check_abbs_spec(path: &Path) -> anyhow::Result<()> {
                 }
             }
 
-            if let Some(chkupdate) = context.get("CHKUPDATE") {
+            if let Some(_chkupdate) = context.get("CHKUPDATE") {
             } else {
                 warn!("{}: Missing CHKUPDATE", path.display());
             }
