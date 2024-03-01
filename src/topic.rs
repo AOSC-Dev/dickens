@@ -1,73 +1,35 @@
 use debversion::Version;
+use libaosc::packages::{FetchPackagesAsync, FetchPackagesError, Package};
 use log::info;
-use reqwest::StatusCode;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
 use std::{
-    io::{Cursor, Read},
+    io::Cursor,
     path::{Path, PathBuf},
     process::Command,
 };
-use xz::read::XzDecoder;
-
-#[derive(Debug, Default, Clone)]
-struct Package {
-    package: String,
-    version: String,
-    architecture: String,
-    filename: String,
-    sha256: String,
-}
 
 async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
-    let mut res = vec![];
-    let repo = "https://repo.aosc.io";
-    let client = reqwest::Client::builder().build()?;
-    let url = format!(
-        "{}/debs/dists/{}/main/binary-{}/Packages.xz",
-        repo, topic, arch
+    let fetcher = FetchPackagesAsync::new(
+        false,
+        format!("dists/{topic}/main/binary-{arch}"),
+        Some("https://repo.aosc.io/debs"),
     );
-    info!("Fetching {}", url);
-    let resp = client.get(url).send().await?;
-
-    if resp.status() == StatusCode::NOT_FOUND {
-        return Ok(res);
-    }
-
-    // xz decompress
-    let bytes = resp.bytes().await?.to_vec();
-    let mut cursor = Cursor::new(&bytes);
-    let mut decoder = XzDecoder::new(&mut cursor);
-    let mut text = String::new();
-    decoder.read_to_string(&mut text).unwrap();
-
-    for part in text.split("\n\n") {
-        if part.trim().is_empty() {
-            continue;
+    let res = match fetcher.fetch_packages(arch, topic).await {
+        Ok(res) => res,
+        Err(FetchPackagesError::ReqwestError(err)) => {
+            info!("Got reqwest error: {err}");
+            return Ok(vec![]);
         }
-
-        let mut pkg = Package::default();
-        for line in part.split("\n") {
-            if let Some(colon) = line.find(":") {
-                let key = &line[..colon];
-                let value = &line[colon + 1..].trim();
-                match key {
-                    "Package" => pkg.package = value.to_string(),
-                    "Version" => pkg.version = value.to_string(),
-                    "Architecture" => pkg.architecture = value.to_string(),
-                    "Filename" => pkg.filename = value.to_string(),
-                    "SHA256" => pkg.sha256 = value.to_string(),
-                    _ => {}
-                }
-            }
+        Err(err) => {
+            return Err(err.into());
         }
-        res.push(pkg);
-    }
+    };
 
     // only keep latest version
     // packages are already sorted by name
     let mut real_res: Vec<Package> = vec![];
-    for pkg in res {
+    for pkg in res.get_packages().clone() {
         if let Some(last) = real_res.last_mut() {
             if last.package == pkg.package
                 && last.architecture == pkg.architecture
