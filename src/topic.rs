@@ -11,9 +11,9 @@ use std::{
 
 async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
     let fetcher = FetchPackagesAsync::new(
-        false,
+        true,
         format!("dists/{topic}/main/binary-{arch}"),
-        Some("https://repo.aosc.io/debs"),
+        None,
     );
     let res = match fetcher.fetch_packages(arch, topic).await {
         Ok(res) => res,

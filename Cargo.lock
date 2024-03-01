@@ -113,7 +113,6 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
- "xz2",
 ]
 
 [[package]]
@@ -668,9 +667,8 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 [[package]]
 name = "libaosc"
 version = "0.1.0"
-source = "git+https://github.com/AOSC-Dev/libaosc-rs#6193728a7667d1b8c9a3501752fbd0fbe2b5e990"
+source = "git+https://github.com/AOSC-Dev/libaosc-rs#6d7a0dcfee930d360af2199663db1f0a7a31c758"
 dependencies = [
- "async-compression",
  "libc",
  "oma-debcontrol",
  "reqwest",
