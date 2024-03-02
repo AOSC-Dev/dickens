@@ -213,6 +213,11 @@ pub async fn report(topic: &str) -> anyhow::Result<String> {
                 cur.archs.join(", ")
             )?;
         }
+        if cur.diff.trim().is_empty() {
+            writeln!(report, "No changes")?;
+            continue;
+        }
+
         writeln!(report, "<details>")?;
 
         let mut added = 0;
