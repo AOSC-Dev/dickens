@@ -214,7 +214,9 @@ pub async fn report(topic: &str) -> anyhow::Result<String> {
             )?;
         }
         if cur.diff.trim().is_empty() {
+            writeln!(report, "")?;
             writeln!(report, "No changes")?;
+            writeln!(report, "")?;
             continue;
         }
 
