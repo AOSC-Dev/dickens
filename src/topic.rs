@@ -1,7 +1,7 @@
-use debversion::Version;
 use libaosc::packages::{FetchPackagesAsync, FetchPackagesError, Package};
 use log::info;
 use sha2::{Digest, Sha256};
+use solver::PackageVersion;
 use std::fmt::Write;
 use std::{
     io::Cursor,
@@ -10,11 +10,7 @@ use std::{
 };
 
 async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
-    let fetcher = FetchPackagesAsync::new(
-        true,
-        format!("dists/{topic}/main/binary-{arch}"),
-        None,
-    );
+    let fetcher = FetchPackagesAsync::new(true, format!("dists/{topic}/main/binary-{arch}"), None);
     let res = match fetcher.fetch_packages(arch, topic).await {
         Ok(res) => res,
         Err(FetchPackagesError::ReqwestError(err)) => {
@@ -33,8 +29,8 @@ async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
         if let Some(last) = real_res.last_mut() {
             if last.package == pkg.package
                 && last.architecture == pkg.architecture
-                && last.version.parse::<Version>().unwrap()
-                    < pkg.version.parse::<Version>().unwrap()
+                && PackageVersion::from(&last.version).unwrap()
+                    < PackageVersion::from(&pkg.version).unwrap()
             {
                 *last = pkg;
             } else {
@@ -104,9 +100,7 @@ async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
         }
 
         if let Some(found) = stable_pkgs.iter().find(|p| p.package == topic_pkg.package) {
-            if found.version.parse::<Version>().unwrap()
-                >= topic_pkg.version.parse::<Version>().unwrap()
-            {
+            if PackageVersion::from(&found.version)? >= PackageVersion::from(&topic_pkg.version)? {
                 // downgrade or no update
                 continue;
             }

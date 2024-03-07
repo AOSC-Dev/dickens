@@ -9,12 +9,12 @@ edition = "2021"
 abbs-meta-apml = { git = "https://github.com/AOSC-Dev/abbs-meta-rs", version = "0.1.0" }
 anyhow = "1.0.79"
 clap = { version = "4.4.18", features = ["derive"] }
-debversion = "0.2.2"
 env_logger = "0.11.0"
 libaosc = { git = "https://github.com/AOSC-Dev/libaosc-rs", version = "0.1.0" }
 log = "0.4.20"
 reqwest = { version = "0.11.24", features = ["gzip"] }
 sha2 = "0.10.8"
+solver = { git = "https://github.com/AOSC-Dev/abbs-meta-rs", version = "0.1.0" }
 tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread"] }
 walkdir = "2.4.0"
 xz = "0.1.0"
