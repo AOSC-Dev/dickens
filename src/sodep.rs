@@ -2,12 +2,12 @@ use log::info;
 use std::process::Command;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Library {
-    pub soname: String,
+pub struct LibraryDependency {
+    pub name: String,
     pub needed: Vec<String>,
 }
 
-pub fn get_library_and_deps(name: &str) -> anyhow::Result<Vec<Library>> {
+pub fn get_library_deps(name: &str) -> anyhow::Result<Vec<LibraryDependency>> {
     info!("Handling package {}", name);
     let mut res = vec![];
     let contents = String::from_utf8(Command::new("dpkg").arg("-L").arg(name).output()?.stdout)?;
@@ -21,25 +21,22 @@ pub fn get_library_and_deps(name: &str) -> anyhow::Result<Vec<Library>> {
             continue;
         }
 
-        info!("Handling file {}", file);
         let readelf_result =
             String::from_utf8(Command::new("readelf").arg("-d").arg(file).output()?.stdout)?;
 
-        let mut soname: Option<&str> = None;
         let mut needed = vec![];
         for line in readelf_result.lines() {
             if line.contains("(NEEDED)") {
                 needed.push(line.split("[").last().unwrap().split("]").next().unwrap());
-            } else if line.contains("(SONAME)") {
-                soname = Some(line.split("[").last().unwrap().split("]").next().unwrap());
             }
         }
 
-        if let Some(soname) = soname {
-            res.push(Library {
-                soname: soname.to_string(),
+        if !needed.is_empty() {
+            res.push(LibraryDependency {
+                name: file.split("/").last().unwrap().to_string(),
                 needed: needed.into_iter().map(str::to_string).collect(),
             });
+            info!("Found file {}", file);
         }
     }
 
@@ -63,13 +60,13 @@ pub fn get_libraries(name: &str) -> anyhow::Result<Vec<String>> {
             continue;
         }
 
-        info!("Handling file {}", file);
         let readelf_result =
             String::from_utf8(Command::new("readelf").arg("-d").arg(file).output()?.stdout)?;
 
         for line in readelf_result.lines() {
-            if line.contains("(SONAME)") {
+            if line.contains("(SONAME)") || line.contains("(NEEDED)") {
                 res.push(file.split("/").last().unwrap().to_string());
+                info!("Found file {}", file);
                 break;
             }
         }

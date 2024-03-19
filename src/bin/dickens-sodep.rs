@@ -1,5 +1,5 @@
 use clap::Parser;
-use dickens::sodep::{get_libraries, get_library_and_deps};
+use dickens::sodep::{get_libraries, get_library_deps};
 use log::{error, warn};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -18,8 +18,13 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
     let mut opt = Cli::parse();
 
-    // always assume gcc
-    opt.depends.push("glibc".to_string());
+    // always assume these packages are available
+    let builtins = ["glibc", "gcc-runtime", "libxcrypt"];
+    for builtin in builtins {
+        if !opt.depends.contains(&builtin.to_string()) {
+            opt.depends.push(builtin.to_string());
+        }
+    }
 
     // map soname => package
     let mut sonames: BTreeMap<String, &str> = BTreeMap::new();
@@ -36,14 +41,17 @@ async fn main() -> anyhow::Result<()> {
 
     // find missing
     let mut depended: BTreeSet<&str> = BTreeSet::new();
-    for lib in get_library_and_deps(&opt.package)? {
+    for lib in get_library_deps(&opt.package)? {
         for needed in lib.needed {
             match sonames.get(&needed) {
                 Some(pkg) => {
                     depended.insert(pkg);
                 }
                 None => {
-                    error!("Library {} missing depenedency {}", lib.soname, needed);
+                    error!(
+                        "Library/executable {} missing depenedency {}",
+                        lib.name, needed
+                    );
                 }
             }
         }
@@ -51,7 +59,9 @@ async fn main() -> anyhow::Result<()> {
 
     for pkg in &opt.depends {
         if !depended.contains(pkg.as_str()) {
-            warn!("Package {} is not depended by {}", pkg, opt.package);
+            if !builtins.contains(&pkg.as_str()) {
+                warn!("Package {} is not depended by {}", pkg, opt.package);
+            }
         }
     }
     Ok(())
