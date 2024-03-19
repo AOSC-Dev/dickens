@@ -1,5 +1,5 @@
 use clap::Parser;
-use dickens::sodep::get_library_and_deps;
+use dickens::sodep::{get_libraries, get_library_and_deps};
 use log::{error, warn};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -24,19 +24,19 @@ async fn main() -> anyhow::Result<()> {
     // map soname => package
     let mut sonames: BTreeMap<String, &str> = BTreeMap::new();
     for pkg in &opt.depends {
-        for lib in get_library_and_deps(pkg)? {
-            assert_eq!(sonames.insert(lib.soname, pkg), None);
+        for lib in get_libraries(pkg)? {
+            assert_eq!(sonames.insert(lib, pkg), None);
         }
     }
 
-    let target = get_library_and_deps(&opt.package)?;
+    let target = get_libraries(&opt.package)?;
     for lib in &target {
-        assert_eq!(sonames.insert(lib.soname.clone(), &opt.package), None);
+        assert_eq!(sonames.insert(lib.clone(), &opt.package), None);
     }
 
     // find missing
     let mut depended: BTreeSet<&str> = BTreeSet::new();
-    for lib in target {
+    for lib in get_library_and_deps(&opt.package)? {
         for needed in lib.needed {
             match sonames.get(&needed) {
                 Some(pkg) => {
