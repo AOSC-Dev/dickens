@@ -1,4 +1,4 @@
-use libaosc::packages::{FetchPackagesAsync, FetchPackagesError, Package};
+use libaosc::packages::{FetchPackagesAsync, FetchPackagesError, Package, Packages};
 use log::info;
 use sha2::{Digest, Sha256};
 use solver::PackageVersion;
@@ -9,16 +9,40 @@ use std::{
     process::Command,
 };
 
-async fn fetch_pkgs(arch: &str, topic: &str) -> anyhow::Result<Vec<Package>> {
-    let fetcher = FetchPackagesAsync::new(true, format!("dists/{topic}/main/binary-{arch}"), None);
-    let res = match fetcher.fetch_packages(arch, topic).await {
-        Ok(res) => res,
-        Err(FetchPackagesError::ReqwestError(err)) => {
-            info!("Got reqwest error: {err}");
+async fn fetch_pkgs(
+    arch: &str,
+    topic: &str,
+    local_repo: Option<PathBuf>,
+) -> anyhow::Result<Vec<Package>> {
+    let res = if let Some(local_repo) = local_repo {
+        // read package file from local repo directly
+        // /debs/dists/{branch}/main/binary-{arch}/Packages
+        let mut path = local_repo.clone();
+        path.push("debs");
+        path.push("dists");
+        path.push(&topic);
+        path.push("main");
+        path.push(format!("binary-{arch}"));
+        path.push("Packages");
+
+        if !path.exists() {
             return Ok(vec![]);
         }
-        Err(err) => {
-            return Err(err.into());
+
+        let content = std::fs::read(path)?;
+        Packages::from_bytes(&content)?
+    } else {
+        let fetcher =
+            FetchPackagesAsync::new(true, format!("dists/{topic}/main/binary-{arch}"), None);
+        match fetcher.fetch_packages(arch, topic).await {
+            Ok(res) => res,
+            Err(FetchPackagesError::ReqwestError(err)) => {
+                info!("Got reqwest error: {err}");
+                return Ok(vec![]);
+            }
+            Err(err) => {
+                return Err(err.into());
+            }
         }
     };
 
@@ -70,6 +94,7 @@ async fn download_pkg(pkg: &Package) -> anyhow::Result<PathBuf> {
         pkg.filename, out
     );
     let response = reqwest::get(format!("https://repo.aosc.io/debs/{}", pkg.filename)).await?;
+    std::fs::create_dir_all("debs")?;
     let mut file = std::fs::File::create(&out)?;
     let mut content = Cursor::new(response.bytes().await?);
     std::io::copy(&mut content, &mut file)?;
@@ -85,15 +110,19 @@ struct Res {
     diff: String,
 }
 
-async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
+async fn handle_arch(
+    arch: &str,
+    topic: String,
+    local_repo: Option<PathBuf>,
+) -> anyhow::Result<Vec<Res>> {
     let mut res = vec![];
-    let topic_pkgs = fetch_pkgs(arch, &topic).await?;
+    let topic_pkgs = fetch_pkgs(arch, &topic, local_repo.clone()).await?;
     if topic_pkgs.is_empty() {
         // no new packages
         return Ok(res);
     }
 
-    let stable_pkgs = fetch_pkgs(arch, "stable").await?;
+    let stable_pkgs = fetch_pkgs(arch, "stable", local_repo.clone()).await?;
     for topic_pkg in topic_pkgs {
         if topic_pkg.package.ends_with("-dbg") {
             continue;
@@ -110,13 +139,30 @@ async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
                 topic_pkg.package, found.version, topic_pkg.version
             );
 
-            // download topic pkg
-            let left = download_pkg(&found).await?;
-            let right = download_pkg(&topic_pkg).await?;
-            let diff = Command::new("./diff-deb.sh")
-                .arg(left)
-                .arg(right)
-                .output()?;
+            let diff = if let Some(local_repo) = &local_repo {
+                // diff directly
+                let mut left = local_repo.clone();
+                left.push("debs");
+                left.push(&found.filename);
+
+                let mut right = local_repo.clone();
+                right.push("debs");
+                right.push(&topic_pkg.filename);
+                info!("./diff-deb.sh {} {}", left.display(), right.display());
+
+                Command::new("./diff-deb.sh")
+                    .arg(left)
+                    .arg(right)
+                    .output()?
+            } else {
+                // download topic pkg
+                let left = download_pkg(&found).await?;
+                let right = download_pkg(&topic_pkg).await?;
+                Command::new("./diff-deb.sh")
+                    .arg(left)
+                    .arg(right)
+                    .output()?
+            };
 
             let new_res = Res {
                 package: topic_pkg.package.clone(),
@@ -128,8 +174,17 @@ async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
 
             res.push(new_res);
         } else {
-            let right = download_pkg(&topic_pkg).await?;
-            let diff = Command::new("./diff-deb-new.sh").arg(right).output()?;
+            let diff = if let Some(local_repo) = &local_repo {
+                // diff directly
+                let mut path = local_repo.clone();
+                path.push("debs");
+                path.push(&topic_pkg.filename);
+                Command::new("./diff-deb-new.sh").arg(path).output()?
+            } else {
+                // download topic pkg
+                let right = download_pkg(&topic_pkg).await?;
+                Command::new("./diff-deb-new.sh").arg(right).output()?
+            };
 
             let new_res = Res {
                 package: topic_pkg.package.clone(),
@@ -144,7 +199,7 @@ async fn handle_arch(arch: &str, topic: String) -> anyhow::Result<Vec<Res>> {
     Ok(res)
 }
 
-pub async fn report(topic: &str) -> anyhow::Result<String> {
+pub async fn report(topic: &str, local_repo: Option<PathBuf>) -> anyhow::Result<String> {
     let mut report = String::new();
     let mut res: Vec<Res> = vec![];
     let archs = [
@@ -159,7 +214,7 @@ pub async fn report(topic: &str) -> anyhow::Result<String> {
     ];
     let handles: Vec<_> = archs
         .iter()
-        .map(|arch| tokio::task::spawn(handle_arch(arch, topic.to_string())))
+        .map(|arch| tokio::task::spawn(handle_arch(arch, topic.to_string(), local_repo.clone())))
         .collect();
 
     for handle in handles {
