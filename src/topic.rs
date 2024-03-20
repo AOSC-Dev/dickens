@@ -148,7 +148,6 @@ async fn handle_arch(
                 let mut right = local_repo.clone();
                 right.push("debs");
                 right.push(&topic_pkg.filename);
-                info!("./diff-deb.sh {} {}", left.display(), right.display());
 
                 Command::new("./diff-deb.sh")
                     .arg(left)
