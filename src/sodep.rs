@@ -51,6 +51,10 @@ pub fn get_libraries(name: &str) -> anyhow::Result<Vec<String>> {
     let mut res: Vec<String> = vec![];
     let contents = String::from_utf8(Command::new("dpkg").arg("-L").arg(name).output()?.stdout)?;
     for file in contents.lines() {
+        if !file.contains(".so") {
+            continue;
+        }
+
         if file.starts_with("/usr/include/")
             || file.starts_with("/usr/share/")
             || file.starts_with("/etc/")
