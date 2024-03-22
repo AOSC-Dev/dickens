@@ -17,4 +17,3 @@ sha2 = "0.10.8"
 solver = { git = "https://github.com/AOSC-Dev/abbs-meta-rs", version = "0.1.0" }
 tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread"] }
 walkdir = "2.4.0"
-xz = "0.1.0"
