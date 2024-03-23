@@ -14,6 +14,7 @@ libaosc = { git = "https://github.com/AOSC-Dev/libaosc-rs", version = "0.1.0" }
 log = "0.4.20"
 reqwest = { version = "0.11.24", features = ["gzip"] }
 sha2 = "0.10.8"
+size = "0.4.1"
 solver = { git = "https://github.com/AOSC-Dev/abbs-meta-rs", version = "0.1.0" }
 tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread"] }
 walkdir = "2.4.0"

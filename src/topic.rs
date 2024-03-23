@@ -1,6 +1,7 @@
 use libaosc::packages::{FetchPackagesAsync, FetchPackagesError, Package, Packages};
 use log::info;
 use sha2::{Digest, Sha256};
+use size::{Base, Size};
 use solver::PackageVersion;
 use std::fmt::Write;
 use std::{
@@ -108,6 +109,8 @@ struct Res {
     old_version: String,
     new_version: String,
     diff: String,
+    old_size: u64,
+    new_size: u64,
 }
 
 async fn handle_arch(
@@ -139,7 +142,7 @@ async fn handle_arch(
                 topic_pkg.package, found.version, topic_pkg.version
             );
 
-            let diff = if let Some(local_repo) = &local_repo {
+            let (diff, old_size, new_size) = if let Some(local_repo) = &local_repo {
                 // diff directly
                 let mut left = local_repo.clone();
                 left.push("debs");
@@ -149,18 +152,26 @@ async fn handle_arch(
                 right.push("debs");
                 right.push(&topic_pkg.filename);
 
-                Command::new("./diff-deb.sh")
-                    .arg(left)
-                    .arg(right)
-                    .output()?
+                (
+                    Command::new("./diff-deb.sh")
+                        .arg(&left)
+                        .arg(&right)
+                        .output()?,
+                    std::fs::metadata(left)?.len(),
+                    std::fs::metadata(right)?.len(),
+                )
             } else {
                 // download topic pkg
                 let left = download_pkg(&found).await?;
                 let right = download_pkg(&topic_pkg).await?;
-                Command::new("./diff-deb.sh")
-                    .arg(left)
-                    .arg(right)
-                    .output()?
+                (
+                    Command::new("./diff-deb.sh")
+                        .arg(&left)
+                        .arg(&right)
+                        .output()?,
+                    std::fs::metadata(left)?.len(),
+                    std::fs::metadata(right)?.len(),
+                )
             };
 
             let new_res = Res {
@@ -169,20 +180,28 @@ async fn handle_arch(
                 old_version: found.version.clone(),
                 new_version: topic_pkg.version.clone(),
                 diff: String::from_utf8_lossy(&diff.stdout).to_string(),
+                old_size,
+                new_size,
             };
 
             res.push(new_res);
         } else {
-            let diff = if let Some(local_repo) = &local_repo {
+            let (diff, new_size) = if let Some(local_repo) = &local_repo {
                 // diff directly
                 let mut path = local_repo.clone();
                 path.push("debs");
                 path.push(&topic_pkg.filename);
-                Command::new("./diff-deb-new.sh").arg(path).output()?
+                (
+                    Command::new("./diff-deb-new.sh").arg(&path).output()?,
+                    std::fs::metadata(path)?.len(),
+                )
             } else {
                 // download topic pkg
                 let right = download_pkg(&topic_pkg).await?;
-                Command::new("./diff-deb-new.sh").arg(right).output()?
+                (
+                    Command::new("./diff-deb-new.sh").arg(&right).output()?,
+                    std::fs::metadata(right)?.len(),
+                )
             };
 
             let new_res = Res {
@@ -191,6 +210,8 @@ async fn handle_arch(
                 old_version: "".to_string(),
                 new_version: topic_pkg.version.clone(),
                 diff: String::from_utf8_lossy(&diff.stdout).to_string(),
+                old_size: 0,
+                new_size,
             };
             res.push(new_res);
         }
@@ -227,6 +248,8 @@ pub async fn report(topic: &str, local_repo: Option<PathBuf>) -> anyhow::Result<
                     && cur.diff == new_res.diff
                 {
                     cur.archs.extend(new_res.archs.clone());
+                    cur.old_size += new_res.old_size;
+                    cur.new_size += new_res.new_size;
                     insert = false;
                     break;
                 }
@@ -261,9 +284,37 @@ pub async fn report(topic: &str, local_repo: Option<PathBuf>) -> anyhow::Result<
                 cur.archs.join(", ")
             )?;
         }
+
+        let size_desc = if cur.new_size >= cur.old_size {
+            if cur.old_size != 0 {
+                format!(
+                    ", size +{} (+{:.1}%)",
+                    Size::from_bytes(cur.new_size - cur.old_size)
+                        .format()
+                        .with_base(Base::Base10),
+                    ((cur.new_size as f64 / cur.old_size as f64) - 1.0) * 100.0
+                )
+            } else {
+                format!(
+                    ", size +{}",
+                    Size::from_bytes(cur.new_size - cur.old_size)
+                        .format()
+                        .with_base(Base::Base10),
+                )
+            }
+        } else {
+            format!(
+                ", size -{} (-{:.1}%)",
+                Size::from_bytes(cur.old_size - cur.new_size)
+                    .format()
+                    .with_base(Base::Base10),
+                (1.0 - (cur.new_size as f64 / cur.old_size as f64)) * 100.0
+            )
+        };
+
         if cur.diff.trim().is_empty() {
             writeln!(report, "")?;
-            writeln!(report, "No changes")?;
+            writeln!(report, "No changes{size_desc}")?;
             writeln!(report, "")?;
             continue;
         }
@@ -284,7 +335,7 @@ pub async fn report(topic: &str, local_repo: Option<PathBuf>) -> anyhow::Result<
 
         writeln!(
             report,
-            "<summary>{added} added, {removed} removed</summary>"
+            "<summary>{added} added, {removed} removed{size_desc}</summary>",
         )?;
         writeln!(report, "")?;
         writeln!(report, "```diff")?;
