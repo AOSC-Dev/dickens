@@ -10,7 +10,12 @@ pub struct LibraryDependency {
 pub fn get_library_deps(name: &str) -> anyhow::Result<Vec<LibraryDependency>> {
     info!("Handling package {}", name);
     let mut res = vec![];
-    let contents = String::from_utf8(Command::new("dpkg").arg("-L").arg(name).output()?.stdout)?;
+    let output = Command::new("dpkg").arg("-L").arg(name).output()?;
+    if !output.status.success() {
+        anyhow::bail!("Failed to list files of package {}", name)
+    }
+
+    let contents = String::from_utf8(output.stdout)?;
     for file in contents.lines() {
         if file.starts_with("/usr/include/")
             || file.starts_with("/usr/share/")
@@ -49,7 +54,12 @@ pub fn get_library_deps(name: &str) -> anyhow::Result<Vec<LibraryDependency>> {
 pub fn get_libraries(name: &str) -> anyhow::Result<Vec<String>> {
     info!("Handling package {}", name);
     let mut res: Vec<String> = vec![];
-    let contents = String::from_utf8(Command::new("dpkg").arg("-L").arg(name).output()?.stdout)?;
+    let output = Command::new("dpkg").arg("-L").arg(name).output()?;
+    if !output.status.success() {
+        anyhow::bail!("Failed to list files of package {}", name)
+    }
+
+    let contents = String::from_utf8(output.stdout)?;
     for file in contents.lines() {
         if !file.contains(".so") {
             continue;
