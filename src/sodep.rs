@@ -1,5 +1,5 @@
 use log::{debug, info};
-use std::process::Command;
+use std::{path::Path, process::Command};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LibraryDependency {
@@ -23,6 +23,10 @@ pub fn get_library_deps(name: &str) -> anyhow::Result<Vec<LibraryDependency>> {
             || file.starts_with("/usr/lib/pkgconfig/")
             || file.starts_with("/usr/lib/gconv/")
         {
+            continue;
+        }
+
+        if Path::new(&file).is_symlink() {
             continue;
         }
 
