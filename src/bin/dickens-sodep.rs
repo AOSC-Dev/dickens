@@ -1,5 +1,8 @@
 use clap::Parser;
-use dickens::sodep::{get_libraries, get_library_deps};
+use dickens::{
+    escape_name_for_graphviz,
+    sodep::{get_libraries, get_library_deps},
+};
 use log::{error, warn};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -20,10 +23,6 @@ struct Cli {
     /// Dump dependency graph in graphviz format
     #[clap(short, long)]
     graph: Option<PathBuf>,
-}
-
-fn escape_name_for_graphviz(name: &str) -> String {
-    name.replace("-", "_")
 }
 
 #[tokio::main]
