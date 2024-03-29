@@ -1,4 +1,4 @@
-use log::info;
+use log::{debug, info};
 use std::process::Command;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -41,7 +41,7 @@ pub fn get_library_deps(name: &str) -> anyhow::Result<Vec<LibraryDependency>> {
                 name: file.split("/").last().unwrap().to_string(),
                 needed: needed.into_iter().map(str::to_string).collect(),
             });
-            info!("Found file {}", file);
+            debug!("Found file {}", file);
         }
     }
 
@@ -80,7 +80,7 @@ pub fn get_libraries(name: &str) -> anyhow::Result<Vec<String>> {
         for line in readelf_result.lines() {
             if line.contains("(SONAME)") || line.contains("(NEEDED)") {
                 res.push(file.split("/").last().unwrap().to_string());
-                info!("Found file {}", file);
+                debug!("Found file {}", file);
                 break;
             }
         }
