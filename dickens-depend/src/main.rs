@@ -1,15 +1,9 @@
 use clap::Parser;
 use dickens::escape_name_for_graphviz;
 use graph_cycles::Cycles;
-use log::{error, info, warn};
+use log::info;
 use petgraph::Graph;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fs::File,
-    io::Write,
-    path::PathBuf,
-    process::Command,
-};
+use std::{collections::BTreeMap, fs::File, io::Write, path::PathBuf, process::Command};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -30,7 +24,7 @@ struct Package {
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
-    let mut opt = Cli::parse();
+    let opt = Cli::parse();
 
     let mut known: BTreeMap<String, Package> = BTreeMap::new();
     let mut todos = opt.packages.clone();

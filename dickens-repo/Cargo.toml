@@ -1,0 +1,14 @@
+[package]
+name = "dickens-repo"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+abbs-meta-apml = { git = "https://github.com/AOSC-Dev/abbs-meta-rs.git", version = "0.1.0" }
+anyhow = "1.0.81"
+clap = { version = "4.5.4", features = ["derive"] }
+env_logger = "0.11.3"
+log = "0.4.21"
+walkdir = "2.5.0"
