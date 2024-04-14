@@ -42,13 +42,21 @@ async fn main() -> anyhow::Result<()> {
     let mut sonames: BTreeMap<String, &str> = BTreeMap::new();
     for pkg in &opt.depends {
         for lib in get_libraries(pkg)? {
-            assert_eq!(sonames.insert(lib, pkg), None);
+            if let Some(p) = sonames.insert(lib.clone(), pkg) {
+                if p != pkg {
+                    warn!("{lib} appears in both {p} and {pkg}");
+                }
+            }
         }
     }
 
     let target = get_libraries(&opt.package)?;
     for lib in &target {
-        assert_eq!(sonames.insert(lib.clone(), &opt.package), None);
+        if let Some(p) = sonames.insert(lib.clone(), &opt.package) {
+            if p != opt.package {
+                warn!("{lib} appears in both {p} and {}", opt.package);
+            }
+        }
     }
 
     let mut file = if let Some(path) = opt.graph {
