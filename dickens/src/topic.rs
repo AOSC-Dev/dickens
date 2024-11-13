@@ -3,6 +3,7 @@ use log::info;
 use sha2::{Digest, Sha256};
 use size::{Base, Size};
 use solver::PackageVersion;
+use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::{
     io::Cursor,
@@ -47,24 +48,24 @@ async fn fetch_pkgs(
         }
     };
 
-    // only keep latest version
-    // packages are already sorted by name
-    let mut real_res: Vec<Package> = vec![];
+    // only keep latest version for each (package, architecture) tuple
+    let mut pkgs: BTreeMap<(String, String), Package> = BTreeMap::new();
     for pkg in res.get_packages().clone() {
-        if let Some(last) = real_res.last_mut() {
-            if last.package == pkg.package
-                && last.architecture == pkg.architecture
-                && PackageVersion::from(&last.version).unwrap()
-                    < PackageVersion::from(&pkg.version).unwrap()
-            {
-                *last = pkg;
-            } else {
-                real_res.push(pkg);
+        use std::collections::btree_map::Entry::{Occupied, Vacant};
+        match pkgs.entry((pkg.package.clone(), pkg.architecture.clone())) {
+            Vacant(entry) => {
+                entry.insert(pkg);
             }
-        } else {
-            real_res.push(pkg);
+            Occupied(mut entry) => {
+                if PackageVersion::from(&entry.get().version).unwrap()
+                    < PackageVersion::from(&pkg.version).unwrap()
+                {
+                    entry.insert(pkg);
+                }
+            }
         }
     }
+    let real_res = pkgs.into_values().collect();
     Ok(real_res)
 }
 
