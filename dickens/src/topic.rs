@@ -1,4 +1,4 @@
-use libaosc::packages::{FetchPackagesAsync, FetchPackagesError, Package, Packages};
+use libaosc::packages::{FetchPackagesAsync, FetchPackagesError, Package};
 use log::info;
 use sha2::{Digest, Sha256};
 use size::{Base, Size};
@@ -32,7 +32,7 @@ async fn fetch_pkgs(
         }
 
         let content = std::fs::read(path)?;
-        Packages::from_bytes(&content)?
+        (content.as_slice()).try_into()?
     } else {
         let fetcher =
             FetchPackagesAsync::new(true, format!("dists/{topic}/main/binary-{arch}"), None);
@@ -50,7 +50,7 @@ async fn fetch_pkgs(
 
     // only keep latest version for each (package, architecture) tuple
     let mut pkgs: BTreeMap<(String, String), Package> = BTreeMap::new();
-    for pkg in res.get_packages().clone() {
+    for pkg in res.0 {
         use std::collections::btree_map::Entry::{Occupied, Vacant};
         match pkgs.entry((pkg.package.clone(), pkg.architecture.clone())) {
             Vacant(entry) => {
@@ -65,7 +65,9 @@ async fn fetch_pkgs(
             }
         }
     }
+
     let real_res = pkgs.into_values().collect();
+
     Ok(real_res)
 }
 
