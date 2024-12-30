@@ -889,7 +889,6 @@ dependencies = [
  "thiserror 2.0.9",
  "tokio",
  "tokio-util",
- "xz2",
 ]
 
 [[package]]
@@ -1218,7 +1217,6 @@ dependencies = [
  "base64",
  "bytes",
  "encoding_rs",
- "futures-channel",
  "futures-core",
  "futures-util",
  "h2",
