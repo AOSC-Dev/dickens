@@ -1,5 +1,6 @@
 use libaosc::packages::{FetchPackagesAsync, FetchPackagesError, Package};
 use log::info;
+use reqwest::ClientBuilder;
 use sha2::{Digest, Sha256};
 use size::{Base, Size};
 use solver::PackageVersion;
@@ -10,6 +11,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use tokio::io::AsyncWriteExt;
 
 async fn fetch_pkgs(
     arch: &str,
@@ -97,11 +99,20 @@ async fn download_pkg(pkg: &Package) -> anyhow::Result<PathBuf> {
         "Downloading https://aosc.io/debs/{} to {:?}",
         pkg.filename, out
     );
-    let response = reqwest::get(format!("https://repo.aosc.io/debs/{}", pkg.filename)).await?;
-    std::fs::create_dir_all("debs")?;
-    let mut file = std::fs::File::create(&out)?;
-    let mut content = Cursor::new(response.bytes().await?);
-    std::io::copy(&mut content, &mut file)?;
+    tokio::fs::create_dir_all("debs").await?;
+    let mut file = tokio::fs::File::create(&out).await?;
+
+    let client = ClientBuilder::new().user_agent("dickens").build()?;
+    let mut response = client
+        .get(format!("https://repo.aosc.io/debs/{}", pkg.filename))
+        .send()
+        .await?
+        .error_for_status()?;
+
+    while let Some(chunk) = response.chunk().await? {
+        file.write_all(&chunk).await?;
+    }
+
     Ok(out)
 }
 
