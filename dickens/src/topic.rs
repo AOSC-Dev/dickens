@@ -1,13 +1,12 @@
 use libaosc::packages::{FetchPackagesAsync, FetchPackagesError, Package};
 use log::info;
-use reqwest::ClientBuilder;
+use reqwest::{Client, ClientBuilder};
 use sha2::{Digest, Sha256};
 use size::{Base, Size};
 use solver::PackageVersion;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::{
-    io::Cursor,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -73,7 +72,7 @@ async fn fetch_pkgs(
     Ok(real_res)
 }
 
-async fn download_pkg(pkg: &Package) -> anyhow::Result<PathBuf> {
+async fn download_pkg(client: &Client, pkg: &Package) -> anyhow::Result<PathBuf> {
     // https://georgik.rocks/how-to-download-binary-file-in-rust-by-reqwest/
     let mut out = PathBuf::new();
     out.push("debs");
@@ -102,7 +101,6 @@ async fn download_pkg(pkg: &Package) -> anyhow::Result<PathBuf> {
     tokio::fs::create_dir_all("debs").await?;
     let mut file = tokio::fs::File::create(&out).await?;
 
-    let client = ClientBuilder::new().user_agent("dickens").build()?;
     let mut response = client
         .get(format!("https://repo.aosc.io/debs/{}", pkg.filename))
         .send()
@@ -138,6 +136,8 @@ async fn handle_arch(
         // no new packages
         return Ok(res);
     }
+
+    let client = ClientBuilder::new().user_agent("dickens").build()?;
 
     let stable_pkgs = fetch_pkgs(arch, "stable", local_repo.clone()).await?;
     for topic_pkg in topic_pkgs {
@@ -176,8 +176,8 @@ async fn handle_arch(
                 )
             } else {
                 // download topic pkg
-                let left = download_pkg(&found).await?;
-                let right = download_pkg(&topic_pkg).await?;
+                let left = download_pkg(&client, &found).await?;
+                let right = download_pkg(&client, &topic_pkg).await?;
                 (
                     Command::new("./diff-deb.sh")
                         .arg(&left)
@@ -211,7 +211,7 @@ async fn handle_arch(
                 )
             } else {
                 // download topic pkg
-                let right = download_pkg(&topic_pkg).await?;
+                let right = download_pkg(&client, &topic_pkg).await?;
                 (
                     Command::new("./diff-deb-new.sh").arg(&right).output()?,
                     std::fs::metadata(right)?.len(),
