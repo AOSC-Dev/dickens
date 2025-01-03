@@ -48,7 +48,7 @@ fn check_abbs_spec(path: &Path) -> anyhow::Result<()> {
             }
 
             if let Some(rel) = context.get("REL") {
-                match str::parse::<usize>(&rel) {
+                match str::parse::<usize>(rel) {
                     Ok(rel) => {
                         if rel == 0 {
                             error!("{}: REL `{}` should not be zero", path.display(), rel);

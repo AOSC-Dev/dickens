@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
                     depended.insert(pkg);
 
                     // skip the package itself for graphviz display
-                    if pkg != &&opt.package {
+                    if pkg != &opt.package {
                         cur_depended.insert(pkg);
                     }
                 }
@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
         let mut i = 0;
         for (name, depends) in &per_pkg_depended {
             for depend in depends {
-                if !builtins.contains(&depend) {
+                if !builtins.contains(depend) {
                     writeln!(file, "    file_{} [label=\"{}\"];", i, name)?;
                     break;
                 }
@@ -119,9 +119,9 @@ async fn main() -> anyhow::Result<()> {
         writeln!(file, "  }}")?;
 
         i = 0;
-        for (_name, depends) in &per_pkg_depended {
+        for depends in per_pkg_depended.values() {
             for depend in depends {
-                if !builtins.contains(&depend) {
+                if !builtins.contains(depend) {
                     writeln!(
                         file,
                         "  file_{} -> {};",
@@ -137,10 +137,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     for pkg in &opt.depends {
-        if !depended.contains(pkg.as_str()) {
-            if !builtins.contains(&pkg.as_str()) {
-                warn!("Package {} is not depended by {}", pkg, opt.package);
-            }
+        if !depended.contains(pkg.as_str()) && !builtins.contains(&pkg.as_str()) {
+            warn!("Package {} is not depended by {}", pkg, opt.package);
         }
     }
     Ok(())

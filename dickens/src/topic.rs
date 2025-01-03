@@ -23,7 +23,7 @@ async fn fetch_pkgs(
         let mut path = local_repo.clone();
         path.push("debs");
         path.push("dists");
-        path.push(&topic);
+        path.push(topic);
         path.push("main");
         path.push(format!("binary-{arch}"));
         path.push("Packages");
@@ -176,7 +176,7 @@ async fn handle_arch(
                 )
             } else {
                 // download topic pkg
-                let left = download_pkg(&client, &found).await?;
+                let left = download_pkg(&client, found).await?;
                 let right = download_pkg(&client, &topic_pkg).await?;
                 (
                     Command::new("./diff-deb.sh")
@@ -278,7 +278,7 @@ pub async fn report(topic: &str, local_repo: Option<PathBuf>) -> anyhow::Result<
     res.sort_by(|a, b| a.package.cmp(&b.package));
 
     writeln!(report, "Dickens-topic report:")?;
-    writeln!(report, "")?;
+    writeln!(report)?;
     for cur in &res {
         if cur.old_version.is_empty() {
             writeln!(
@@ -327,9 +327,9 @@ pub async fn report(topic: &str, local_repo: Option<PathBuf>) -> anyhow::Result<
         };
 
         if cur.diff.trim().is_empty() {
-            writeln!(report, "")?;
+            writeln!(report)?;
             writeln!(report, "No changes{size_desc}")?;
-            writeln!(report, "")?;
+            writeln!(report)?;
             continue;
         }
 
@@ -351,7 +351,7 @@ pub async fn report(topic: &str, local_repo: Option<PathBuf>) -> anyhow::Result<
             report,
             "<summary>{added} added, {removed} removed{size_desc}</summary>",
         )?;
-        writeln!(report, "")?;
+        writeln!(report)?;
         writeln!(report, "```diff")?;
         writeln!(report, "{}", cur.diff)?;
         writeln!(report, "```")?;

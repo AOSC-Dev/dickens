@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
         };
         for line in String::from_utf8(output.stdout)?.lines() {
             if line.starts_with("  Depends:") {
-                let pkg = line.split(" ").skip(3).next().unwrap();
+                let pkg = line.split(" ").nth(3).unwrap();
                 todos.push(pkg.to_string());
                 cur.depends.push(pkg.to_string());
             }
