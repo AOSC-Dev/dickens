@@ -111,6 +111,8 @@ async fn download_pkg(client: &Client, pkg: &Package) -> anyhow::Result<PathBuf>
         file.write_all(&chunk).await?;
     }
 
+    file.shutdown().await?;
+
     Ok(out)
 }
 
