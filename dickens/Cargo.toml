@@ -14,3 +14,4 @@ sha2 = "0.10.8"
 size = "0.4.1"
 solver = { git = "https://github.com/AOSC-Dev/abbs-meta-rs.git", version = "0.1.0" }
 tokio = { version = "1.37.0", features = ["rt", "fs"] }
+faster-hex = "0.10.0"

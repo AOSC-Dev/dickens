@@ -6,6 +6,7 @@ use size::{Base, Size};
 use solver::PackageVersion;
 use std::collections::BTreeMap;
 use std::fmt::Write;
+use std::io::BufReader;
 use std::{
     path::{Path, PathBuf},
     process::Command,
@@ -77,14 +78,19 @@ async fn download_pkg(client: &Client, pkg: &Package) -> anyhow::Result<PathBuf>
     let mut out = PathBuf::new();
     out.push("debs");
     out.push(Path::new(&pkg.filename).file_name().unwrap());
+
     if out.exists() {
-        let content = std::fs::read(&out)?;
-        let hash = Sha256::digest(&content);
-        let hash_str = hash
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<Vec<_>>()
-            .concat();
+        let outc = out.clone();
+
+        let hash_str = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
+            let mut reader = BufReader::new(std::fs::File::open(outc)?);
+            let mut checker = Sha256::new();
+            std::io::copy(&mut reader, &mut checker)?;
+
+            Ok(faster_hex::hex_string(&checker.finalize()))
+        })
+        .await??;
+
         if hash_str == pkg.sha256 {
             info!(
                 "Skipping already downloaded https://repo.aosc.io/debs/{} at {:?}",
@@ -95,9 +101,11 @@ async fn download_pkg(client: &Client, pkg: &Package) -> anyhow::Result<PathBuf>
     }
 
     info!(
-        "Downloading https://aosc.io/debs/{} to {:?}",
-        pkg.filename, out
+        "Downloading https://aosc.io/debs/{} to {}",
+        pkg.filename,
+        out.display()
     );
+
     tokio::fs::create_dir_all("debs").await?;
     let mut file = tokio::fs::File::create(&out).await?;
 
